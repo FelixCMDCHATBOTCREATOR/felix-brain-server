@@ -1,16 +1,17 @@
-
 from flask import Flask, request, jsonify
 import json
 import openai
 import os
 
 app = Flask(__name__)
-openai.api_key = os.getenv("OPEN_AI_KEY")
 
+# Use environment variable for API key
+openai.api_key = os.getenv("OPEN_AI_KEY")  # Change if your env var has a different name
 
 MEMORY_FILE = "felix_memory.json"
 EDIT_PASSWORD = "jayeshhagucaihahah"
 
+# Load or initialize memory
 if os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, "r", encoding="utf-8") as f:
         memory = json.load(f)
@@ -32,7 +33,7 @@ def chat():
             return jsonify({"reply": "⛔ Wrong password for changing name!"})
         memory["name"] = user_message[11:].strip().title()
         save_memory()
-        return jsonify({"reply": f"Nice to meet you, {memory['name']}! (^_^)"} )
+        return jsonify({"reply": f"Nice to meet you, {memory['name']}! (^_^)"})
 
     if user_message.startswith("my favorite color is "):
         if password != EDIT_PASSWORD:
@@ -61,14 +62,6 @@ def chat():
         return jsonify({"reply": "Why was the computer cold? Because it left its Windows open! 😹 (^_^)"})
 
     try:
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": user_message}]
-        )
-        gpt_reply = response.choices[0].message.content.strip()
-        return jsonify({"reply": gpt_reply})
-    except Exception as e:
-        return jsonify({"reply": f"Sorry, GPT failed: {e}"})
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=6969)
+            messages=[{"role": "use]()
