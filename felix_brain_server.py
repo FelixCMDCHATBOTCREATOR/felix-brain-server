@@ -28,20 +28,19 @@ def chat():
     password = data.get("password", "")
     user_ip = request.remote_addr
 
-    # Create unique memory per IP
+    # Create per-user memory
     user_mem = memory.get(user_ip, {"name": None, "favorite_color": None, "favorite_game": None})
-    
-    # Logging user input
+
+    # Logging every message
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {user_ip} says: {user_message}")
 
-    # First-time greeting and memory setup
-    if not user_mem["name"]:
-        user_mem["name"] = input("🤖 Felix: What's your name? ").strip().title()
+    # First time: ask for name
+    if user_mem["name"] is None:
         memory[user_ip] = user_mem
         save_memory()
-        return jsonify({"reply": f"Nice to meet you, {user_mem['name']}! (^_^)"})
+        return jsonify({"reply": "Hi there! What’s your name? Please type: my name is <your name>"})
 
-    # Update memory if password matches
+    # Memory updates
     if user_message.startswith("my name is "):
         if password != EDIT_PASSWORD:
             return jsonify({"reply": "⛔ Wrong password for changing name!"})
@@ -61,7 +60,7 @@ def chat():
     memory[user_ip] = user_mem
     save_memory()
 
-    # Predefined answers
+    # Predefined questions
     if "what is my name" in user_message:
         return jsonify({"reply": f"You're {user_mem['name']}!"})
 
@@ -74,8 +73,7 @@ def chat():
     if "joke" in user_message:
         return jsonify({"reply": "Why was the computer cold? Because it left its Windows open! 😹 (^_^)"})
 
-
-    # GPT fallback
+    # GPT response fallback
     try:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -85,7 +83,6 @@ def chat():
         return jsonify({"reply": gpt_reply})
     except Exception as e:
         return jsonify({"reply": f"Sorry, GPT failed: {e}"})
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 6969))
