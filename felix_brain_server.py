@@ -5,7 +5,8 @@ import openai
 import os
 
 app = Flask(__name__)
-openai.api_key = ""  # <-- replace with your key
+openai.api_key = os.getenv("OPEN_AI_KEY")
+
 
 MEMORY_FILE = "felix_memory.json"
 EDIT_PASSWORD = "jayeshhagucaihahah"
