@@ -4,14 +4,11 @@ import openai
 import os
 
 app = Flask(__name__)
-
-# Use environment variable for API key
-openai.api_key = os.getenv("OPEN_AI_KEY")  # Change if your env var has a different name
+openai.api_key = os.getenv("OPEN_AI_KEY")  # It's safer to use environment variables for your key
 
 MEMORY_FILE = "felix_memory.json"
 EDIT_PASSWORD = "jayeshhagucaihahah"
 
-# Load or initialize memory
 if os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, "r", encoding="utf-8") as f:
         memory = json.load(f)
@@ -21,6 +18,10 @@ else:
 def save_memory():
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(memory, f, indent=4)
+
+@app.route("/")
+def home():
+    return "<h1>Felix Brain Server is running!</h1><p>Use the /chat endpoint to talk to Felix.</p>"
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -64,4 +65,12 @@ def chat():
     try:
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
-            messages=[{"role": "use]()
+            messages=[{"role": "user", "content": user_message}]
+        )
+        gpt_reply = response.choices[0].message.content.strip()
+        return jsonify({"reply": gpt_reply})
+    except Exception as e:
+        return jsonify({"reply": f"Sorry, GPT failed: {e}"})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=6969)
