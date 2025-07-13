@@ -1,4 +1,6 @@
+
 import os
+import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import openai
@@ -6,6 +8,9 @@ import json
 
 app = Flask(__name__)
 CORS(app)
+
+# Setup logging
+logging.basicConfig(level=logging.DEBUG)
 
 # Load OpenAI key from environment
 openai.api_key = os.getenv("OPEN_AI_KEY")
@@ -27,26 +32,26 @@ def save_memory():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json()
-    user_input = data.get("message", "").strip()
-    user_ip = request.remote_addr
-    password = data.get("password", "")
-
-    # Initialize user memory
-    if user_ip not in user_data:
-        user_data[user_ip] = {"name": None}
-
-    user_mem = user_data[user_ip]
-
-    # Name capture logic
-    if user_input.lower().startswith("my name is"):
-        name = user_input[11:].strip().title()
-        user_mem["name"] = name
-        save_memory()
-        return jsonify({"reply": f"Yay! Nice to meet you, {name}! What can I do for you? (^_^)"}), 200
-
     try:
-        # Get ChatGPT answer first
+        data = request.get_json()
+        user_input = data.get("message", "").strip()
+        user_ip = request.remote_addr
+        password = data.get("password", "")
+
+        # Initialize user memory
+        if user_ip not in user_data:
+            user_data[user_ip] = {"name": None}
+
+        user_mem = user_data[user_ip]
+
+        # Name capture logic
+        if user_input.lower().startswith("my name is"):
+            name = user_input[11:].strip().title()
+            user_mem["name"] = name
+            save_memory()
+            return jsonify({"reply": f"Yay! Nice to meet you, {name}! What can I do for you? (^_^)"}), 200
+
+        # Prepare chat messages
         messages = [
             {"role": "system", "content": "You are Felix, a cute and helpful AI assistant who talks with kindness, emojis, and Felix-style."},
             {"role": "user", "content": user_input}
@@ -63,7 +68,9 @@ def chat():
         return jsonify({"reply": reply}), 200
 
     except Exception as e:
+        logging.exception("Error handling /chat")
         return jsonify({"reply": f"Oops! Something went wrong: {str(e)} 😵"}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
