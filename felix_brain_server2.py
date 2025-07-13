@@ -1,105 +1,69 @@
 import os
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import openai
-import threading
+import json
 
 app = Flask(__name__)
+CORS(app)
 
-# Load your OpenAI API key from environment variable
+# Load OpenAI key from environment
 openai.api_key = os.getenv("OPEN_AI_KEY")
 
-# In-memory user memory storage: { ip: { "name": str, "history": [...] } }
-user_memories = {}
-mem_lock = threading.Lock()
+# Memory file
+MEMORY_FILE = "felix_user_memory.json"
 
-def get_user_memory(ip):
-    with mem_lock:
-        if ip not in user_memories:
-            user_memories[ip] = {"name": None, "history": []}
-        return user_memories[ip]
+# Load or initialize memory
+if os.path.exists(MEMORY_FILE):
+    with open(MEMORY_FILE, "r") as f:
+        user_data = json.load(f)
+else:
+    user_data = {}
 
-def create_felix_prompt(memory, user_message):
-    # Basic conversation context + memory
-    system_msg = {
-        "role": "system",
-        "content": (
-            "You are Felix, a cute, fluffy, friendly digital assistant. "
-            "Answer with short, sweet, Felix-style messages with emoticons like (^_^). "
-            "Be playful and kind."
-        )
-    }
-
-    # Add remembered name if exists
-    if memory["name"]:
-        name_info = f"User's name is {memory['name']}."
-    else:
-        name_info = "User's name is unknown."
-
-    messages = [system_msg, {"role": "system", "content": name_info}]
-
-    # Add previous conversation history (last 8 messages)
-    if memory["history"]:
-        messages += memory["history"][-8:]
-
-    # Add the new user message
-    messages.append({"role": "user", "content": user_message})
-
-    return messages
+# Helper to save memory
+def save_memory():
+    with open(MEMORY_FILE, "w") as f:
+        json.dump(user_data, f)
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json(force=True)
-    user_message = data.get("message", "").strip()
-    password = data.get("password", "").strip()  # If you want to use password for memory editing
-
+    data = request.get_json()
+    user_input = data.get("message", "").strip()
     user_ip = request.remote_addr
-    memory = get_user_memory(user_ip)
+    password = data.get("password", "")
 
-    # If no name known, and client sends a special message to set name
-    if memory["name"] is None:
-        # Simple heuristic: if user says "my name is X" or sends "name: X"
-        lowered = user_message.lower()
-        if lowered.startswith("my name is "):
-            name = user_message[11:].strip().title()
-            if name:
-                memory["name"] = name
-                return jsonify({"reply": f"Oh, nice to meet you, {name}! (^_^)"} )
-        elif lowered.startswith("name:"):
-            name = user_message[5:].strip().title()
-            if name:
-                memory["name"] = name
-                return jsonify({"reply": f"Got it, {name}! Felix remembers you now! (^_^)"} )
+    # Initialize user memory
+    if user_ip not in user_data:
+        user_data[user_ip] = {"name": None}
 
-        # If no name yet, ask client to send the name (without blocking)
-        return jsonify({"reply": "Hi! What’s your name? Please tell me by saying 'My name is ...' (^_^)"} )
+    user_mem = user_data[user_ip]
 
-    # Add user message to conversation history
-    memory["history"].append({"role": "user", "content": user_message})
-
-    # Create messages for OpenAI
-    messages = create_felix_prompt(memory, user_message)
+    # Name capture logic
+    if user_input.lower().startswith("my name is"):
+        name = user_input[11:].strip().title()
+        user_mem["name"] = name
+        save_memory()
+        return jsonify({"reply": f"Yay! Nice to meet you, {name}! What can I do for you? (^_^)"}), 200
 
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=150,
-        )
-        felix_reply = response.choices[0].message.content.strip()
+        # Get ChatGPT answer first
+        messages = [
+            {"role": "system", "content": "You are Felix, a cute and helpful AI assistant who talks with kindness, emojis, and Felix-style."},
+            {"role": "user", "content": user_input}
+        ]
+        chat_response = openai.ChatCompletion.create(model="gpt-4", messages=messages)
+        gpt_reply = chat_response["choices"][0]["message"]["content"].strip()
 
-        # Add Felix reply to history
-        memory["history"].append({"role": "assistant", "content": felix_reply})
+        # If name not known, gently ask after replying
+        if not user_mem["name"]:
+            reply = f"{gpt_reply} ✨ By the way, what’s your name? Say 'My name is ...' so I can remember you! (^_^)"
+        else:
+            reply = f"{gpt_reply} 💬"
 
-        # Keep only last 20 messages in history to save memory
-        if len(memory["history"]) > 20:
-            memory["history"] = memory["history"][-20:]
-
-        return jsonify({"reply": felix_reply})
+        return jsonify({"reply": reply}), 200
 
     except Exception as e:
-        print(f"[ERROR] OpenAI API error: {e}")
-        return jsonify({"reply": "Oops! Felix is sleepy right now. Try again in a bit? (^-^)"}), 500
+        return jsonify({"reply": f"Oops! Something went wrong: {str(e)} 😵"}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    app.run(debug=True)
