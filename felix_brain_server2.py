@@ -1,17 +1,19 @@
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import openai
+from openai import OpenAI
 import json
 
 app = Flask(__name__)
 CORS(app)
 
-openai.api_key = os.getenv("OPEN_AI_KEY")
+# Initialize OpenAI client with environment key
+client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
 
+# Memory file for user data
 MEMORY_FILE = "felix_user_memory.json"
 
-# Load or initialize memory
+# Load or initialize user memory
 if os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, "r") as f:
         user_data = json.load(f)
@@ -28,18 +30,22 @@ def chat():
     user_input = data.get("message", "").strip()
     user_ip = request.remote_addr
 
-    # Initialize user memory
+    if not user_input:
+        return jsonify({"reply": "No input received 😵"}), 400
+
+    # Reset command from client
+    if "CrimsonResetConfigData" in user_input:
+        if user_ip in user_data:
+            user_data[user_ip]["name"] = None
+            save_memory()
+        return jsonify({"reply": "Memory reset. Please tell me your name again. (^_^)"})
+
     if user_ip not in user_data:
         user_data[user_ip] = {"name": None}
+
     user_mem = user_data[user_ip]
 
-    # Special reset command
-    if user_input == "CrimsonResetConfigData":
-        user_mem["name"] = None
-        save_memory()
-        return jsonify({"reply": "Memory reset. I forgot your name. Please tell me again! (^_^)"})
-
-    # Store name if given
+    # Name set logic
     if user_input.lower().startswith("my name is"):
         name = user_input[11:].strip().title()
         user_mem["name"] = name
@@ -47,18 +53,17 @@ def chat():
         return jsonify({"reply": f"Oh, nice to meet you, {name}! (^_^)"}), 200
 
     try:
-        # Let Felix answer anything, even if name not given
-        messages = [
-            {"role": "system", "content": "You are Felix, a cute and helpful AI assistant who speaks kindly and with emojis."},
-            {"role": "user", "content": user_input}
-        ]
-        chat_response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # ✅ More reliable
-            messages=messages
+        # Use ChatGPT to get response
+        response = client.chat.completions.create(
+            model="gpt-4",  # or "gpt-3.5-turbo"
+            messages=[
+                {"role": "system", "content": "You are Felix, a friendly, emoji-using assistant who replies cutely."},
+                {"role": "user", "content": user_input}
+            ]
         )
-        gpt_reply = chat_response["choices"][0]["message"]["content"].strip()
+        gpt_reply = response.choices[0].message.content.strip()
 
-        # If name not known, remind user nicely
+        # Add name reminder if name not known
         if not user_mem["name"]:
             reply = f"{gpt_reply} ✨ Hi! What’s your name? Please tell me by saying 'My name is ...' (^_^)"
         else:
@@ -67,9 +72,7 @@ def chat():
         return jsonify({"reply": reply}), 200
 
     except Exception as e:
-        # Print to console for debugging
-        print("❌ ERROR:", e)
-        return jsonify({"reply": f"Oops! Something went wrong: {str(e)} 😵"}), 500
+        return jsonify({"reply": f"❌ ERROR contacting OpenAI: {e}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
