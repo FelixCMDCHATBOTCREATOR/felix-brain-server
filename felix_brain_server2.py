@@ -1,28 +1,56 @@
 import os
+import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from openai import OpenAI
-import json
+from dotenv import load_dotenv
+from datetime import datetime
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# Initialize OpenAI client with environment key
 client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
 
-# Memory file for user data
+# Files
 MEMORY_FILE = "felix_user_memory.json"
+LOG_FILE = "server_log.txt"
+USER_REGISTRY_FILE = "user_registry.txt"
 
-# Load or initialize user memory
+# Load user memory
 if os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, "r") as f:
         user_data = json.load(f)
 else:
     user_data = {}
 
+def log_event(text):
+    timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{timestamp} {text}\n")
+
+def log_user_registry(ip, name, uid):
+    if not os.path.exists(USER_REGISTRY_FILE):
+        with open(USER_REGISTRY_FILE, "w", encoding="utf-8") as f:
+            f.write("=== Felix User Registry ===\n")
+
+    entry = f"{ip} | ID {uid} | {name}"
+    with open(USER_REGISTRY_FILE, "r", encoding="utf-8") as f:
+        if entry in f.read():
+            return  # Already logged
+
+    timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+    with open(USER_REGISTRY_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{timestamp} {entry}\n")
+
 def save_memory():
     with open(MEMORY_FILE, "w") as f:
         json.dump(user_data, f)
+
+def get_next_id():
+    ids = [info.get("id", 0) for info in user_data.values()]
+    return max(ids, default=0) + 1
 
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -33,46 +61,57 @@ def chat():
     if not user_input:
         return jsonify({"reply": "No input received 😵"}), 400
 
-    # Reset command from client
     if "CrimsonResetConfigData" in user_input:
         if user_ip in user_data:
-            user_data[user_ip]["name"] = None
+            old_name = user_data[user_ip].get("name", "Unknown")
+            old_id = user_data[user_ip].get("id", "?")
+            user_data[user_ip] = {"name": None, "id": old_id}
             save_memory()
-        return jsonify({"reply": "Memory reset. Please tell me your name again. (^_^)"})
+            log_event(f"♻️ <{old_name} #{old_id}> reset their memory.")
+        return jsonify({"reply": "Memory reset. Please tell me your name again. (^_^)"}), 200
 
     if user_ip not in user_data:
-        user_data[user_ip] = {"name": None}
+        user_data[user_ip] = {"name": None, "id": get_next_id()}
+        save_memory()
 
     user_mem = user_data[user_ip]
+    user_id = user_mem["id"]
+    user_name = user_mem["name"]
 
-    # Name set logic
     if user_input.lower().startswith("my name is"):
         name = user_input[11:].strip().title()
-        user_mem["name"] = name
-        save_memory()
-        return jsonify({"reply": f"Oh, nice to meet you, {name}! (^_^)"}), 200
+        if not user_name:
+            user_mem["name"] = name
+            save_memory()
+            log_user_registry(user_ip, name, user_id)
+            log_event(f"📝 <{user_ip}> set name to: {name} (ID #{user_id})")
+            return jsonify({"reply": f"Oh, nice to meet you, {name}! You’re user #{user_id} (^_^)"}), 200
+        else:
+            return jsonify({"reply": f"You already set your name as {user_name} (User #{user_id})"}), 200
+
+    if not user_name:
+        return jsonify({"reply": "👀 Please tell me your name first by saying 'My name is ...' (^_^)"}), 200
 
     try:
-        # Use ChatGPT to get response
+        log_event(f"📨 <{user_name} #{user_id}> said: {user_input}")
+
         response = client.chat.completions.create(
-            model="gpt-4",  # or "gpt-3.5-turbo"
+            model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are Felix, a friendly, emoji-using assistant who replies cutely."},
+                {"role": "system", "content": f"You are Felix, a cute chatbot. The user's name is {user_name}."},
                 {"role": "user", "content": user_input}
             ]
         )
-        gpt_reply = response.choices[0].message.content.strip()
 
-        # Add name reminder if name not known
-        if not user_mem["name"]:
-            reply = f"{gpt_reply} ✨ Hi! What’s your name? Please tell me by saying 'My name is ...' (^_^)"
-        else:
-            reply = f"{gpt_reply} 💬"
-
-        return jsonify({"reply": reply}), 200
+        reply = response.choices[0].message.content.strip()
+        log_event(f"🤖 Felix replied: {reply}")
+        return jsonify({"reply": f"{reply} 💬"}), 200
 
     except Exception as e:
-        return jsonify({"reply": f"❌ ERROR contacting OpenAI: {e}"}), 500
+        error_msg = f"❌ ERROR from OpenAI: {e}"
+        log_event(error_msg)
+        return jsonify({"reply": error_msg}), 500
 
 if __name__ == "__main__":
+    log_event("🚀 Server starting...")
     app.run(debug=True)
