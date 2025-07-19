@@ -52,7 +52,6 @@ def get_next_id():
     ids = [info.get("id", 0) for info in user_data.values()]
     return max(ids, default=0) + 1
 
-# NEW: Root route to check server status
 @app.route("/")
 def home():
     return "Felix Brain Server is running."
@@ -119,4 +118,5 @@ def chat():
 
 if __name__ == "__main__":
     log_event("🚀 Server starting...")
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
