@@ -20,7 +20,7 @@ USER_REGISTRY_FILE = "user_registry.txt"
 
 # Load user memory
 if os.path.exists(MEMORY_FILE):
-    with open(MEMORY_FILE, "r") as f:
+    with open(MEMORY_FILE, "r", encoding="utf-8") as f:
         user_data = json.load(f)
 else:
     user_data = {}
@@ -45,8 +45,8 @@ def log_user_registry(ip, name, uid):
         f.write(f"{timestamp} {entry}\n")
 
 def save_memory():
-    with open(MEMORY_FILE, "w") as f:
-        json.dump(user_data, f)
+    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(user_data, f, ensure_ascii=False, indent=2)
 
 def get_next_id():
     ids = [info.get("id", 0) for info in user_data.values()]
@@ -58,9 +58,9 @@ def home():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    data = request.get_json()
+    data = request.get_json(force=True)
     user_input = data.get("message", "").strip()
-    user_ip = request.remote_addr
+    user_ip = request.remote_addr or "unknown"
 
     if not user_input:
         return jsonify({"reply": "No input received 😵"}), 400
@@ -119,4 +119,4 @@ def chat():
 if __name__ == "__main__":
     log_event("🚀 Server starting...")
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port)
