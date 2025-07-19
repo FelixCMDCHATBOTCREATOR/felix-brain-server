@@ -16,10 +16,26 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, origins="*")  # Allow all origins for testing
 
-# Initialize OpenAI client with error handling
+# Initialize OpenAI client with proper error handling
 try:
-    client = OpenAI(api_key=os.getenv("OPEN_AI_KEY"))
-    logger.info("OpenAI client initialized successfully")
+    api_key = os.getenv("OPEN_AI_KEY")
+    if not api_key:
+        raise ValueError("OPEN_AI_KEY environment variable is not set")
+    
+    # Simple initialization - avoid any extra parameters
+    client = OpenAI(api_key=api_key)
+    
+    # Test the connection
+    test_response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": "test"}],
+        max_tokens=5
+    )
+    logger.info("OpenAI client initialized and tested successfully")
+    
+except ValueError as e:
+    logger.error(f"Environment variable error: {e}")
+    client = None
 except Exception as e:
     logger.error(f"Failed to initialize OpenAI client: {e}")
     client = None
@@ -94,6 +110,7 @@ def home():
     return jsonify({
         "status": "Felix Brain Server is running",
         "version": "1.0",
+        "openai_status": "connected" if client else "disconnected",
         "endpoints": ["/", "/chat", "/health"]
     })
 
@@ -163,27 +180,33 @@ def chat():
 
         # Check if OpenAI client is available
         if client is None:
-            return jsonify({"reply": "Sorry, I'm having trouble connecting to my brain right now 😅", "status": "error"}), 500
+            return jsonify({"reply": "Sorry, I'm having trouble connecting to my brain right now 😅 Check the API key!", "status": "error"}), 500
 
         log_event(f"📨 <{user_name} #{user_id}> said: {user_input}")
 
-        # Make OpenAI request
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": f"You are Felix, a cute and friendly chatbot. The user's name is {user_name}. Keep responses concise and add personality."},
-                {"role": "user", "content": user_input}
-            ],
-            max_tokens=150,
-            temperature=0.7
-        )
+        # Make OpenAI request with better error handling
+        try:
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": f"You are Felix, a cute and friendly chatbot. The user's name is {user_name}. Keep responses concise and add personality."},
+                    {"role": "user", "content": user_input}
+                ],
+                max_tokens=150,
+                temperature=0.7
+            )
 
-        reply = response.choices[0].message.content.strip()
-        log_event(f"🤖 Felix replied: {reply}")
-        return jsonify({"reply": f"{reply} 💬", "status": "success"}), 200
+            reply = response.choices[0].message.content.strip()
+            log_event(f"🤖 Felix replied: {reply}")
+            return jsonify({"reply": f"{reply} 💬", "status": "success"}), 200
+            
+        except Exception as openai_error:
+            logger.error(f"OpenAI API error: {openai_error}")
+            log_event(f"❌ OpenAI ERROR: {str(openai_error)}")
+            return jsonify({"reply": "Sorry, my brain is having trouble right now. Please try again! 😅", "status": "error"}), 500
 
     except Exception as e:
-        error_msg = f"❌ ERROR: {str(e)}"
+        error_msg = f"❌ GENERAL ERROR: {str(e)}"
         logger.error(error_msg)
         log_event(error_msg)
         return jsonify({"reply": "Sorry, I encountered an error. Please try again! 😅", "status": "error"}), 500
@@ -203,5 +226,6 @@ if __name__ == "__main__":
     
     logger.info(f"Starting server on port {port}")
     logger.info(f"Debug mode: {debug_mode}")
+    logger.info(f"OpenAI client status: {'✅ Connected' if client else '❌ Not connected'}")
     
     app.run(host="0.0.0.0", port=port, debug=debug_mode)
