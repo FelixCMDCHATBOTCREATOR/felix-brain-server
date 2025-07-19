@@ -32,23 +32,42 @@ if open_ai_key and not openai_api_key:
     logger.info("Set OPENAI_API_KEY from OPEN_AI_KEY")
 
 try:
-    # Try default initialization (should work now)
-    logger.info("Trying OpenAI() default initialization...")
-    client = OpenAI()
+    # Try explicit initialization with API key
+    api_key = os.getenv("OPENAI_API_KEY") or open_ai_key
+    if not api_key:
+        raise ValueError("No OpenAI API key found in environment variables")
+    
+    logger.info("Trying OpenAI() initialization with explicit API key...")
+    client = OpenAI(api_key=api_key)
     logger.info("✅ OpenAI client created successfully!")
     
-    # Test the connection immediately
+    # Test the connection immediately with a minimal request
     logger.info("Testing OpenAI API connection...")
     test_response = client.chat.completions.create(
         model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": "test"}],
+        messages=[{"role": "user", "content": "Hi"}],
         max_tokens=5
     )
     logger.info("✅ OpenAI API test successful - Felix brain is connected!")
     
+except ValueError as ve:
+    logger.error(f"❌ API Key error: {ve}")
+    client = None
 except Exception as e:
     logger.error(f"❌ OpenAI initialization or test failed: {e}")
-    client = None
+    logger.error(f"Error type: {type(e).__name__}")
+    
+    # Try alternative initialization methods
+    try:
+        logger.info("Trying alternative OpenAI initialization...")
+        # Force use environment variable method
+        if open_ai_key:
+            os.environ["OPENAI_API_KEY"] = open_ai_key
+        client = OpenAI()
+        logger.info("✅ Alternative OpenAI client creation successful!")
+    except Exception as e2:
+        logger.error(f"❌ Alternative initialization also failed: {e2}")
+        client = None
 
 # Files - Use absolute paths to avoid issues
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
