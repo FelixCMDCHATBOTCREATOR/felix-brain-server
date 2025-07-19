@@ -16,29 +16,39 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, origins="*")  # Allow all origins for testing
 
-# Initialize OpenAI client with proper error handling
+# Initialize OpenAI client with minimal approach
+client = None
 try:
-    api_key = os.getenv("OPEN_AI_KEY")
-    if not api_key:
-        raise ValueError("OPEN_AI_KEY environment variable is not set")
+    # Try the most basic initialization first
+    client = OpenAI()
+    logger.info("OpenAI client initialized with default settings")
     
-    # Simple initialization - avoid any extra parameters
-    client = OpenAI(api_key=api_key)
-    
-    # Test the connection
-    test_response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": "test"}],
-        max_tokens=5
-    )
-    logger.info("OpenAI client initialized and tested successfully")
-    
-except ValueError as e:
-    logger.error(f"Environment variable error: {e}")
-    client = None
-except Exception as e:
-    logger.error(f"Failed to initialize OpenAI client: {e}")
-    client = None
+except Exception as e1:
+    logger.error(f"Default OpenAI init failed: {e1}")
+    try:
+        # Try with explicit API key
+        api_key = os.getenv("OPEN_AI_KEY") or os.getenv("OPENAI_API_KEY")
+        if api_key:
+            client = OpenAI(api_key=api_key)
+            logger.info("OpenAI client initialized with explicit API key")
+        else:
+            logger.error("No API key found in environment variables")
+    except Exception as e2:
+        logger.error(f"Explicit API key init also failed: {e2}")
+        client = None
+
+# Test the client if it was created successfully
+if client:
+    try:
+        test_response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": "test"}],
+            max_tokens=5
+        )
+        logger.info("✅ OpenAI API test successful")
+    except Exception as e:
+        logger.error(f"OpenAI API test failed: {e}")
+        client = None
 
 # Files - Use absolute paths to avoid issues
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
