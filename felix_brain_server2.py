@@ -16,39 +16,57 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, origins="*")  # Allow all origins for testing
 
-# Initialize OpenAI client with minimal approach
+# Initialize OpenAI client with detailed logging
 client = None
+
+# Check environment variables first
+open_ai_key = os.getenv("OPEN_AI_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
+
+logger.info(f"OPEN_AI_KEY exists: {bool(open_ai_key)}")
+logger.info(f"OPENAI_API_KEY exists: {bool(openai_api_key)}")
+
+if open_ai_key:
+    logger.info(f"OPEN_AI_KEY starts with: {open_ai_key[:8]}...")
+if openai_api_key:
+    logger.info(f"OPENAI_API_KEY starts with: {openai_api_key[:8]}...")
+
 try:
-    # Try the most basic initialization first
+    # Try method 1: Default initialization (looks for OPENAI_API_KEY)
+    logger.info("Trying OpenAI() default initialization...")
     client = OpenAI()
-    logger.info("OpenAI client initialized with default settings")
+    logger.info("✅ OpenAI client created with default method")
     
 except Exception as e1:
-    logger.error(f"Default OpenAI init failed: {e1}")
+    logger.error(f"❌ Default OpenAI() failed: {e1}")
+    
     try:
-        # Try with explicit API key
-        api_key = os.getenv("OPEN_AI_KEY") or os.getenv("OPENAI_API_KEY")
-        if api_key:
-            client = OpenAI(api_key=api_key)
-            logger.info("OpenAI client initialized with explicit API key")
+        # Try method 2: With explicit OPEN_AI_KEY
+        if open_ai_key:
+            logger.info("Trying with OPEN_AI_KEY...")
+            client = OpenAI(api_key=open_ai_key)
+            logger.info("✅ OpenAI client created with OPEN_AI_KEY")
         else:
-            logger.error("No API key found in environment variables")
+            logger.error("No OPEN_AI_KEY found, cannot try explicit initialization")
     except Exception as e2:
-        logger.error(f"Explicit API key init also failed: {e2}")
+        logger.error(f"❌ Explicit API key init failed: {e2}")
         client = None
 
 # Test the client if it was created successfully
 if client:
     try:
+        logger.info("Testing OpenAI API connection...")
         test_response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": "test"}],
             max_tokens=5
         )
-        logger.info("✅ OpenAI API test successful")
+        logger.info("✅ OpenAI API test successful - Felix brain is connected!")
     except Exception as e:
-        logger.error(f"OpenAI API test failed: {e}")
+        logger.error(f"❌ OpenAI API test failed: {e}")
         client = None
+else:
+    logger.error("❌ No OpenAI client could be created")
 
 # Files - Use absolute paths to avoid issues
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
