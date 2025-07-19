@@ -52,6 +52,11 @@ def get_next_id():
     ids = [info.get("id", 0) for info in user_data.values()]
     return max(ids, default=0) + 1
 
+# NEW: Root route to check server status
+@app.route("/")
+def home():
+    return "Felix Brain Server is running."
+
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json()
@@ -96,7 +101,7 @@ def chat():
         log_event(f"📨 <{user_name} #{user_id}> said: {user_input}")
 
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": f"You are Felix, a cute chatbot. The user's name is {user_name}."},
                 {"role": "user", "content": user_input}
