@@ -5,3 +5,12 @@ python-dotenv==1.0.0
 gunicorn==21.2.0
 requests==2.31.0
 pyttsx3==2.90
+
+# New additions:
+loguru==0.7.2            # Powerful logging with better formatting and levels
+sqlite-utils==3.37       # Easier handling of SQLite from Python
+schedule==1.2.1          # For periodic tasks (e.g. cleanup, retries)
+httpx==0.27.0            # Async HTTP client; great for faster API calls
+retrying==1.3.4          # Retry logic for failed OpenAI API calls
+tqdm==4.66.1             # Progress bars for loops or background tasks
+colorama==0.4.6          # Colored terminal output (helpful for debugging)
